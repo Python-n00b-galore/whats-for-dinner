@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>What's for Dinner?</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#ffb59a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dinner?">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="mascot" id="mascot" aria-hidden="true">
+      <div class="steam"></div><div class="steam s2"></div>
+      <div class="pot"><span class="eye l"></span><span class="eye r"></span><span class="mouth"></span><span class="cheek l"></span><span class="cheek r"></span></div>
+    </div>
+    <h1>What's for Dinner?</h1>
+    <p id="sub" class="sub"></p>
+  </header>
+
+  <section id="login" class="card hidden">
+    <h2>Sign in</h2>
+    <form id="loginForm">
+      <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+      <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+      <button class="btn primary" type="submit">Sign in</button>
+      <p id="loginErr" class="err"></p>
+    </form>
+  </section>
+
+  <main id="main" class="hidden">
+    <nav class="tabs">
+      <button data-tab="plan" class="active">🗓️ Week</button>
+      <button data-tab="recipes">📖 Recipes</button>
+    </nav>
+
+    <section id="tab-plan">
+      <div class="row">
+        <button id="planBtn" class="btn primary big">✨ Plan my week</button>
+        <button id="regenBtn" class="btn">🔀 Reshuffle unlocked</button>
+      </div>
+      <p id="weekLabel" class="muted"></p>
+      <ul id="days" class="days"></ul>
+      <p id="planEmpty" class="muted center hidden">No plan yet. Add some recipes, then tap “Plan my week”!</p>
+    </section>
+
+    <section id="tab-recipes" class="hidden">
+      <form id="addForm" class="row">
+        <input id="newRecipe" type="text" placeholder="Add a recipe…" maxlength="80" autocomplete="off">
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+      <ul id="recipes" class="recipes"></ul>
+      <p id="recipesEmpty" class="muted center hidden">No recipes yet 🍝</p>
+      <div class="row foot">
+        <button id="exportBtn" class="btn small">💾 Export backup</button>
+        <button id="signOutBtn" class="btn small hidden">Sign out</button>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+<canvas id="confetti"></canvas>
+<script type="module" src="app.js"></script>
+</body>
+</html>
