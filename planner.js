@@ -19,7 +19,8 @@ export function fillWeek(recipes, days, now = Date.now()) {
   const out = days.map(d => ({ ...d }));
   const used = new Set(out.filter(d => d.locked && d.recipeId).map(d => d.recipeId));
   for (const d of out) {
-    if (d.locked && d.recipeId) continue;
+    if (d.locked && (d.recipeId || d.custom)) continue; // locked (or hand-written) days stay
+    delete d.custom;
     let pool = recipes.filter(r => !used.has(r.id));
     if (!pool.length) pool = recipes;                // fewer recipes than days: allow repeats
     if (!pool.length) { d.recipeId = null; continue; }
@@ -34,7 +35,7 @@ export function swapDay(recipes, days, i, now = Date.now()) {
   const used = new Set(out.map((d, j) => j !== i && d.recipeId).filter(Boolean));
   let pool = recipes.filter(r => !used.has(r.id) && r.id !== out[i].recipeId);
   if (!pool.length) pool = recipes.filter(r => r.id !== out[i].recipeId);
-  if (pool.length) out[i].recipeId = pickOne(pool, now).id;
+  if (pool.length) { out[i].recipeId = pickOne(pool, now).id; delete out[i].custom; }
   return out;
 }
 

@@ -44,6 +44,7 @@ function render() {
   $("signOutBtn").classList.toggle("hidden", !cloudEnabled);
 
   $("recipesEmpty").classList.toggle("hidden", has);
+  $("recipeList").replaceChildren(...data.recipes.map(r => Object.assign(document.createElement("option"), { value: r.name })));
   $("recipes").innerHTML = "";
   [...data.recipes].sort((a, b) => a.name.localeCompare(b.name)).forEach(r => {
     const li = document.createElement("li");
@@ -74,7 +75,9 @@ function render() {
     const li = document.createElement("li");
     if (d.locked) li.classList.add("locked");
     const day = document.createElement("div"); day.className = "day"; day.textContent = DAYS[i];
-    const meal = document.createElement("div"); meal.className = "meal"; meal.textContent = nameOf(d.recipeId) || "—";
+    const meal = document.createElement("div"); meal.className = "meal editable";
+    meal.textContent = nameOf(d.recipeId) || d.custom || "—";
+    meal.title = "Tap to edit"; meal.onclick = () => editDay(i, meal);
     li.append(day, meal,
       btn(d.locked ? "🔒" : "🔓", "Lock day", () => { d.locked = !d.locked; save(); render(); }),
       btn("🎲", "Swap this day", () => {
@@ -83,6 +86,30 @@ function render() {
       }));
     $("days").append(li);
   });
+}
+// Tap a day to type what's for dinner. A known recipe name links to that recipe; anything else is kept as free text.
+function editDay(i, el) {
+  const d = data.plan.days[i];
+  const input = document.createElement("input");
+  input.type = "text"; input.className = "dayinput"; input.maxLength = 80; input.setAttribute("list", "recipeList");
+  input.value = nameOf(d.recipeId) || d.custom || ""; input.placeholder = "What's for dinner?";
+  let done = false;
+  const finish = ok => {
+    if (done) return; done = true;
+    const v = input.value.trim();
+    if (ok && v !== (nameOf(d.recipeId) || d.custom || "")) {
+      const r = data.recipes.find(x => x.name.toLowerCase() === v.toLowerCase());
+      if (r) { d.recipeId = r.id; delete d.custom; r.lastPlanned = Date.now(); }
+      else if (v) { d.recipeId = null; d.custom = v; }
+      else { d.recipeId = null; delete d.custom; }
+      d.locked = !!(d.recipeId || d.custom); // hand-picked days stay put when reshuffling
+      save();
+    }
+    render();
+  };
+  input.onkeydown = e => { if (e.key === "Enter") finish(true); else if (e.key === "Escape") finish(false); };
+  input.onblur = () => finish(true);
+  el.replaceChildren(input); el.onclick = null; input.focus(); input.select();
 }
 function pulse(i) { const li = $("days").children[i]; if (li) li.classList.add("pop"); }
 function btn(txt, label, fn) {
