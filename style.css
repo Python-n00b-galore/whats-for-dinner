@@ -68,3 +68,6 @@ ul{list-style:none;padding:0;margin:0}
 .dots{display:flex;justify-content:center;gap:8px;margin:2px 0 10px}
 .dots i{width:9px;height:9px;border-radius:9px;background:var(--peach-l);transition:all .25s}
 .dots i.on{width:26px;background:var(--peach)}
+/* the two plan buttons: same height, text may wrap onto two lines on narrow phones */
+#tab-plan .row{flex-wrap:nowrap;align-items:stretch}
+.btn.big{font-size:15px;padding:12px 8px;line-height:1.2;display:flex;align-items:center;justify-content:center;text-align:center}
