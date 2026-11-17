@@ -3,8 +3,25 @@ import { fillWeek, swapDay, mondayOf } from "./planner.js";
 
 const $ = id => document.getElementById(id);
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-let data = { recipes: [], plan: null };
+let data = { recipes: [], plans: {} };
 let store;
+let cur = 0; // which of the 3 weeks is showing
+const WEEKS = 3, WEEK_NAMES = ["This week", "Next week", "In 2 weeks"];
+
+// Plans are stored per week as data.plans["YYYY-MM-DD" (Monday)] = { days: [...] }
+const pad = n => String(n).padStart(2, "0");
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function weekKey(i) { const m = mondayOf(); return keyOf(new Date(m.getFullYear(), m.getMonth(), m.getDate() + 7 * i)); }
+const planAt = i => (data.plans || {})[weekKey(i)];
+// move the single plan from the first version of the app into the new per-week storage
+function normalize(d) {
+  d.plans = d.plans || {};
+  if (d.plan) { const k = keyOf(mondayOf(new Date(d.plan.weekStart))); if (!d.plans[k]) d.plans[k] = { days: d.plan.days }; }
+  delete d.plan;
+  return d;
+}
+const otherWeeksRecipes = i => new Set([...Array(WEEKS).keys()].filter(j => j !== i)
+  .flatMap(j => (planAt(j)?.days || []).map(d => d.recipeId).filter(Boolean)));
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 const nameOf = id => (data.recipes.find(r => r.id === id) || {}).name;
@@ -56,40 +73,64 @@ function render() {
     const del = btn("🗑️", "Delete", () => {
       if (!confirm(`Delete “${r.name}”?`)) return;
       data.recipes = data.recipes.filter(x => x.id !== r.id);
-      if (data.plan) data.plan.days.forEach(d => { if (d.recipeId === r.id) { d.recipeId = null; d.locked = false; } });
+      Object.values(data.plans).forEach(p => p.days.forEach(d => { if (d.recipeId === r.id) { d.recipeId = null; d.locked = false; } }));
       save(); render();
     });
     li.append(s, ed, del); $("recipes").append(li);
   });
 
-  const plan = data.plan;
-  $("planEmpty").classList.toggle("hidden", !!plan);
-  $("regenBtn").classList.toggle("hidden", !plan);
-  $("planBtn").textContent = plan ? "✨ New week" : "✨ Plan my week";
-  $("days").innerHTML = "";
-  $("weekLabel").textContent = "";
-  if (!plan) return;
-  const mon = new Date(plan.weekStart);
-  $("weekLabel").textContent = "Week of " + mon.toLocaleDateString(undefined, { day: "numeric", month: "long" });
-  plan.days.forEach((d, i) => {
-    const li = document.createElement("li");
-    if (d.locked) li.classList.add("locked");
-    const day = document.createElement("div"); day.className = "day"; day.textContent = DAYS[i];
-    const meal = document.createElement("div"); meal.className = "meal editable";
-    meal.textContent = nameOf(d.recipeId) || d.custom || "—";
-    meal.title = "Tap to edit"; meal.onclick = () => editDay(i, meal);
-    li.append(day, meal,
-      btn(d.locked ? "🔒" : "🔓", "Lock day", () => { d.locked = !d.locked; save(); render(); }),
-      btn("🎲", "Swap this day", () => {
-        if (d.locked) return toast("Unlock this day first 🔓");
-        plan.days = swapDay(data.recipes, plan.days, i); touch(plan.days); save(); render(); pulse(i);
-      }));
-    $("days").append(li);
+  renderWeeks();
+}
+function buildWeeks() {
+  const box = $("weeks"), dots = $("dots");
+  for (let w = 0; w < WEEKS; w++) {
+    const sec = document.createElement("section"); sec.className = "week";
+    sec.innerHTML = '<p class="weekname"></p><ul class="days"></ul><p class="muted center empty">Nothing planned yet. Add some recipes, then tap “Plan my week”!</p>';
+    sec.querySelector(".weekname").textContent = WEEK_NAMES[w];
+    box.append(sec); dots.append(document.createElement("i"));
+  }
+  let t;
+  box.addEventListener("scroll", () => {
+    const i = Math.max(0, Math.min(WEEKS - 1, Math.round(box.scrollLeft / box.clientWidth)));
+    if (i !== cur) { cur = i; updateNav(); }
+    clearTimeout(t); t = setTimeout(() => { if (cur !== lastSettled) { lastSettled = cur; jump(); } }, 150);
+  }, { passive: true });
+}
+let lastSettled = 0;
+function updateNav() {
+  [...$("dots").children].forEach((d, i) => d.classList.toggle("on", i === cur));
+  const has = !!planAt(cur);
+  $("regenBtn").classList.toggle("hidden", !has);
+  $("planBtn").textContent = has ? "✨ New week" : "✨ Plan my week";
+}
+function renderWeeks() {
+  [...$("weeks").children].forEach((sec, w) => {
+    const plan = planAt(w), ul = sec.querySelector(".days");
+    ul.innerHTML = "";
+    sec.querySelector(".empty").classList.toggle("hidden", !!plan);
+    if (!plan) return;
+    plan.days.forEach((d, i) => {
+      const li = document.createElement("li");
+      if (d.locked) li.classList.add("locked");
+      const day = document.createElement("div"); day.className = "day"; day.textContent = DAYS[i];
+      const meal = document.createElement("div"); meal.className = "meal editable";
+      meal.textContent = nameOf(d.recipeId) || d.custom || "—";
+      meal.title = "Tap to edit"; meal.onclick = () => editDay(w, i, meal);
+      li.append(day, meal,
+        btn(d.locked ? "🔒" : "🔓", "Lock day", () => { d.locked = !d.locked; save(); render(); }),
+        btn("🎲", "Swap this day", () => {
+          if (d.locked) return toast("Unlock this day first 🔓");
+          plan.days = swapDay(data.recipes, plan.days, i, Date.now(), otherWeeksRecipes(w));
+          touch(plan.days); save(); render(); pulse(w, i);
+        }));
+      ul.append(li);
+    });
   });
+  updateNav();
 }
 // Tap a day to type what's for dinner. A known recipe name links to that recipe; anything else is kept as free text.
-function editDay(i, el) {
-  const d = data.plan.days[i];
+function editDay(w, i, el) {
+  const d = planAt(w).days[i];
   const input = document.createElement("input");
   input.type = "text"; input.className = "dayinput"; input.maxLength = 80; input.setAttribute("list", "recipeList");
   input.value = nameOf(d.recipeId) || d.custom || ""; input.placeholder = "What's for dinner?";
@@ -111,7 +152,7 @@ function editDay(i, el) {
   input.onblur = () => finish(true);
   el.replaceChildren(input); el.onclick = null; input.focus(); input.select();
 }
-function pulse(i) { const li = $("days").children[i]; if (li) li.classList.add("pop"); }
+function pulse(w, i) { const li = $("weeks").children[w].querySelector(".days").children[i]; if (li) li.classList.add("pop"); }
 function btn(txt, label, fn) {
   const b = document.createElement("button"); b.className = "icon"; b.textContent = txt; b.title = label;
   b.setAttribute("aria-label", label); b.onclick = fn; return b;
@@ -125,15 +166,22 @@ function touch(days) {
 /* ---------- plan generation ---------- */
 function generate(keepLocks) {
   if (!data.recipes.length) return toast("Add some recipes first 📖");
-  const old = data.plan && keepLocks ? data.plan.days : [];
-  const base = DAYS.map((_, i) => ({ recipeId: old[i]?.locked ? old[i].recipeId : null, locked: !!old[i]?.locked }));
-  const days = fillWeek(data.recipes, base);
-  data.plan = { weekStart: (keepLocks && data.plan ? new Date(data.plan.weekStart) : mondayOf()).getTime(), days };
+  const w = cur, existing = planAt(w);
+  if (existing && !keepLocks && !confirm(`Replace ${WEEK_NAMES[w].toLowerCase()}'s plan with a brand new one? The current plan will be lost.`)) return;
+  const old = existing && keepLocks ? existing.days : [];
+  const base = DAYS.map((_, i) => ({ recipeId: old[i]?.locked ? old[i].recipeId : null, locked: !!old[i]?.locked, ...(old[i]?.locked && old[i].custom ? { custom: old[i].custom } : {}) }));
+  const days = fillWeek(data.recipes, base, Date.now(), otherWeeksRecipes(w));
+  // drop weeks that are in the past while we're saving
+  const keep = new Set([...Array(WEEKS).keys()].map(weekKey));
+  data.plans = Object.fromEntries(Object.entries(data.plans).filter(([k]) => keep.has(k)));
+  data.plans[weekKey(w)] = { days };
   touch(days); save();
-  $("days").classList.add("shuffle");
+  const ul = $("weeks").children[w].querySelector(".days");
+  ul.classList.add("shuffle");
   setTimeout(() => {
-    $("days").classList.remove("shuffle"); render();
-    [...$("days").children].forEach((li, i) => { li.style.animationDelay = i * 70 + "ms"; li.classList.add("pop"); });
+    ul.classList.remove("shuffle"); render();
+    const list = $("weeks").children[w].querySelector(".days");
+    [...list.children].forEach((li, i) => { li.style.animationDelay = i * 70 + "ms"; li.classList.add("pop"); });
     confetti(); jump();
   }, 600);
 }
@@ -168,8 +216,9 @@ $("loginForm").onsubmit = async e => {
 };
 
 /* ---------- start ---------- */
+buildWeeks();
 store = await initStore({
-  onData: d => { data = d; render(); },
+  onData: d => { data = normalize(d); render(); },
   onAuth: signedIn => { $("login").classList.toggle("hidden", signedIn); $("main").classList.toggle("hidden", !signedIn); }
 });
 render();

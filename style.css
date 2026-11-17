@@ -60,3 +60,11 @@ ul{list-style:none;padding:0;margin:0}
 
 .meal.editable{cursor:text}
 .dayinput{margin:0!important;padding:8px 10px!important}
+
+.weeks{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:0 -8px}
+.weeks::-webkit-scrollbar{display:none}
+.week{flex:0 0 100%;scroll-snap-align:center;scroll-snap-stop:always;padding:2px 8px 6px}
+.weekname{text-align:center;font-weight:700;color:#a07f7f;margin:0 0 10px;font-size:14px}
+.dots{display:flex;justify-content:center;gap:8px;margin:2px 0 10px}
+.dots i{width:9px;height:9px;border-radius:9px;background:var(--peach-l);transition:all .25s}
+.dots i.on{width:26px;background:var(--peach)}
