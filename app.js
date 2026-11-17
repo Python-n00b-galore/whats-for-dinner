@@ -3,21 +3,25 @@ import { fillWeek, swapDay, mondayOf } from "./planner.js";
 
 const $ = id => document.getElementById(id);
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-let data = { recipes: [], plans: {} };
+let data = { recipes: [], weeks: [null, null, null] };
 let store;
 let cur = 0; // which of the 3 weeks is showing
 const WEEKS = 3, WEEK_NAMES = ["This week", "Next week", "In 2 weeks"];
 
-// Plans are stored per week as data.plans["YYYY-MM-DD" (Monday)] = { days: [...] }
+// Plans live in three fixed slots: data.weeks = [thisWeek, nextWeek, inTwoWeeks], each { days: [...] } or null.
+// Nothing moves on its own: slots only shift when "New week" is pressed on the first page.
 const pad = n => String(n).padStart(2, "0");
 const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 function weekKey(i) { const m = mondayOf(); return keyOf(new Date(m.getFullYear(), m.getMonth(), m.getDate() + 7 * i)); }
-const planAt = i => (data.plans || {})[weekKey(i)];
-// move the single plan from the first version of the app into the new per-week storage
+const planAt = i => (data.weeks && data.weeks[i]) || null;
+// convert data from earlier versions of the app (date-keyed plans / a single plan) into the three slots
 function normalize(d) {
-  d.plans = d.plans || {};
-  if (d.plan) { const k = keyOf(mondayOf(new Date(d.plan.weekStart))); if (!d.plans[k]) d.plans[k] = { days: d.plan.days }; }
-  delete d.plan;
+  const weeks = Array.isArray(d.weeks) ? d.weeks.slice(0, WEEKS) : [];
+  while (weeks.length < WEEKS) weeks.push(null);
+  if (d.plans) { weeks.forEach((w, i) => { if (!w && d.plans[weekKey(i)]) weeks[i] = d.plans[weekKey(i)]; }); }
+  else if (d.plan) { const i = [...Array(WEEKS).keys()].find(i => weekKey(i) === keyOf(mondayOf(new Date(d.plan.weekStart)))); if (i !== undefined && !weeks[i]) weeks[i] = { days: d.plan.days }; }
+  d.weeks = weeks.map(w => w || null);
+  delete d.plans; delete d.plan;
   return d;
 }
 const otherWeeksRecipes = i => new Set([...Array(WEEKS).keys()].filter(j => j !== i)
@@ -73,7 +77,7 @@ function render() {
     const del = btn("🗑️", "Delete", () => {
       if (!confirm(`Delete “${r.name}”?`)) return;
       data.recipes = data.recipes.filter(x => x.id !== r.id);
-      Object.values(data.plans).forEach(p => p.days.forEach(d => { if (d.recipeId === r.id) { d.recipeId = null; d.locked = false; } }));
+      data.weeks.forEach(p => p && p.days.forEach(d => { if (d.recipeId === r.id) { d.recipeId = null; d.locked = false; } }));
       save(); render();
     });
     li.append(s, ed, del); $("recipes").append(li);
@@ -164,23 +168,36 @@ function touch(days) {
 }
 
 /* ---------- plan generation ---------- */
+const emptyDays = () => DAYS.map(() => ({ recipeId: null, locked: false }));
+function makePlan(w, base) { return { days: fillWeek(data.recipes, base, Date.now(), otherWeeksRecipes(w)) }; }
 function generate(keepLocks) {
   if (!data.recipes.length) return toast("Add some recipes first 📖");
   const w = cur, existing = planAt(w);
-  if (existing && !keepLocks && !confirm(`Replace ${WEEK_NAMES[w].toLowerCase()}'s plan with a brand new one? The current plan will be lost.`)) return;
-  const old = existing && keepLocks ? existing.days : [];
-  const base = DAYS.map((_, i) => ({ recipeId: old[i]?.locked ? old[i].recipeId : null, locked: !!old[i]?.locked, ...(old[i]?.locked && old[i].custom ? { custom: old[i].custom } : {}) }));
-  const days = fillWeek(data.recipes, base, Date.now(), otherWeeksRecipes(w));
-  // drop weeks that are in the past while we're saving
-  const keep = new Set([...Array(WEEKS).keys()].map(weekKey));
-  data.plans = Object.fromEntries(Object.entries(data.plans).filter(([k]) => keep.has(k)));
-  data.plans[weekKey(w)] = { days };
-  touch(days); save();
-  const ul = $("weeks").children[w].querySelector(".days");
+  let animate = w;
+  if (keepLocks) {
+    // reshuffle: keep locked days, refill the rest of this week
+    const old = existing ? existing.days : [];
+    const base = DAYS.map((_, i) => ({ recipeId: old[i]?.locked ? old[i].recipeId : null, locked: !!old[i]?.locked, ...(old[i]?.locked && old[i].custom ? { custom: old[i].custom } : {}) }));
+    data.weeks[w] = makePlan(w, base);
+  } else if (!existing) {
+    data.weeks[w] = makePlan(w, emptyDays());
+  } else if (w === 0) {
+    // "New week" on the first page: this week is done, everything moves one step forward, last page gets a fresh plan
+    if (!confirm("Start a new week? The current plan will be removed, the other weeks move forward, and a new plan is made for the last page.")) return;
+    data.weeks = [data.weeks[1] || null, data.weeks[2] || null, null];
+    data.weeks[2] = makePlan(2, emptyDays());
+    animate = 0;
+  } else {
+    if (!confirm(`Replace ${WEEK_NAMES[w].toLowerCase()}'s plan with a brand new one? The current plan will be lost.`)) return;
+    data.weeks[w] = makePlan(w, emptyDays());
+  }
+  data.weeks.forEach(p => p && touch(p.days));
+  save();
+  const ul = $("weeks").children[animate].querySelector(".days");
   ul.classList.add("shuffle");
   setTimeout(() => {
     ul.classList.remove("shuffle"); render();
-    const list = $("weeks").children[w].querySelector(".days");
+    const list = $("weeks").children[animate].querySelector(".days");
     [...list.children].forEach((li, i) => { li.style.animationDelay = i * 70 + "ms"; li.classList.add("pop"); });
     confetti(); jump();
   }, 600);
