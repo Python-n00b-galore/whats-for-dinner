@@ -85,7 +85,7 @@ function buildWeeks() {
   const box = $("weeks"), dots = $("dots");
   for (let w = 0; w < WEEKS; w++) {
     const sec = document.createElement("section"); sec.className = "week";
-    sec.innerHTML = '<p class="weekname"></p><ul class="days"></ul><p class="muted center empty">Nothing planned yet. Add some recipes, then tap “Plan my week”!</p>';
+    sec.innerHTML = '<p class="weekname"></p><ul class="days"></ul><p class="muted center empty">Nothing planned yet. Add some recipes, then tap “New week”!</p>';
     sec.querySelector(".weekname").textContent = WEEK_NAMES[w];
     box.append(sec); dots.append(document.createElement("i"));
   }
@@ -101,7 +101,7 @@ function updateNav() {
   [...$("dots").children].forEach((d, i) => d.classList.toggle("on", i === cur));
   const has = !!planAt(cur);
   $("regenBtn").classList.toggle("hidden", !has);
-  $("planBtn").textContent = has ? "✨ New week" : "✨ Plan my week";
+  
 }
 function renderWeeks() {
   [...$("weeks").children].forEach((sec, w) => {
@@ -223,3 +223,7 @@ store = await initStore({
 });
 render();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+// show unexpected errors on screen so they can be reported
+addEventListener("error", e => toast("Oops: " + (e.message || "something went wrong")));
+addEventListener("unhandledrejection", e => toast("Oops: " + ((e.reason && e.reason.message) || "something went wrong")));

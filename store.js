@@ -35,7 +35,11 @@ export async function initStore({ onData, onAuth }) {
     unsub = fs.onSnapshot(ref, snap => onData(snap.exists() ? { ...empty(), ...snap.data() } : empty()));
   });
   return {
-    save: d => ref && fs.setDoc(ref, d).catch(e => console.error(e)),
+    // JSON round-trip strips `undefined` values, which Firestore refuses; try/catch keeps the UI working if a save fails
+    save: d => {
+      try { return ref && fs.setDoc(ref, JSON.parse(JSON.stringify(d))).catch(e => console.error(e)); }
+      catch (e) { console.error(e); }
+    },
     signIn: (e, p) => auth.signInWithEmailAndPassword(a, e, p),
     signOut: () => auth.signOut(a)
   };
